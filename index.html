@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบจัดการสตอกสินค้าและขายสินค้า (ลุงแจ่ม)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Sarabun', sans-serif; }
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; padding: 0 !important; }
+            .print-container { box-shadow: none !important; border: none !important; }
+            .receipt-print-area { display: block !important; }
+        }
+        .receipt-print-area { display: none; }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen p-4 md:p-6">
+
+    <!-- หน้าต่างรหัสผ่าน (Lock Screen) - ซ่อนรหัสผ่านเริ่มต้นเรียบร้อย -->
+    <div id="lockScreen" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white p-6 md:p-8 rounded-3xl shadow-2xl max-w-sm w-full text-center space-y-4">
+            <div class="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-2xl mx-auto flex items-center justify-center text-2xl shadow-inner">
+                🔐
+            </div>
+            <div>
+                <h2 class="text-xl font-bold text-slate-900">ระบบป้องกันความปลอดภัย</h2>
+                <p class="text-xs text-slate-500 mt-1">กรุณากรอกรหัสผ่านเพื่อเข้าใช้งานระบบ</p>
+            </div>
+            <div class="space-y-3">
+                <input type="password" id="pinInput" maxlength="6" placeholder="••••••" 
+                    class="w-full text-center text-2xl tracking-widest px-4 py-3 border-2 border-slate-200 rounded-2xl focus:border-indigo-500 focus:outline-none bg-slate-50 font-mono">
+                <button onclick="verifyPin()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-2xl font-bold transition shadow-md">
+                    ปลดล็อกเข้าสู่ระบบ
+                </button>
+            </div>
+            <p class="text-[11px] text-slate-400">เปลี่ยนรหัสผ่านได้ที่เมนูตั้งค่าร้านค้า</p>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto space-y-6">
+        
+        <!-- หัวข้อโปรแกรม & ข้อมูลร้านค้า -->
+        <header class="bg-white p-6 rounded-2xl shadow-sm space-y-4 no-print">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-4">
+                <div class="space-y-1.5">
+                    <h1 class="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                        📦 ระบบสตอกสินค้า & บันทึกยอดขาย (ส่วนตัว)
+                    </h1>
+                    <div id="headerShopInfoDisplay" class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm pt-1">
+                        <!-- แสดงข้อมูลร้านอัตโนมัติ -->
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="toggleShopSettings()" class="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition">⚙️ ตั้งค่าร้านค้า / รหัสผ่าน</button>
+                    <button onclick="exportData()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition">สำรองข้อมูล (JSON)</button>
+                    <label class="bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-xl text-sm font-medium cursor-pointer transition">
+                        นำเข้าข้อมูล <input type="file" id="importFile" onchange="importData(event)" class="hidden" accept=".json">
+                    </label>
+                    <button onclick="lockSystem()" class="bg-slate-700 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-sm font-medium transition">🔒 ล็อกจอ</button>
+                </div>
+            </div>
+
+            <!-- กล่องตั้งค่าข้อมูลร้านค้า & รหัสผ่าน -->
+            <div id="shopSettingsBox" class="hidden bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
+                <h3 class="font-bold text-slate-700 text-sm flex items-center gap-1">📝 ข้อมูลร้านค้า & ตั้งค่ารหัสผ่านเข้าใช้งาน</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">ชื่อร้าน / ชื่อผู้ประกอบการ</label>
+                        <input type="text" id="shopName" placeholder="เช่น ร้านลุงแจ่มการค้า" class="w-full px-3 py-1.5 border rounded-xl text-xs bg-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">เบอร์โทรศัพท์</label>
+                        <input type="text" id="shopPhone" placeholder="เช่น 089-1234567" class="w-full px-3 py-1.5 border rounded-xl text-xs bg-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">เลขประจำตัวผู้เสียภาษี</label>
+                        <input type="text" id="shopTaxId" placeholder="เลข 13 หลัก (ถ้ามี)" class="w-full px-3 py-1.5 border rounded-xl text-xs bg-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">รหัสผ่านใหม่ (PIN 6 หลัก)</label>
+                        <input type="password" id="shopPin" maxlength="6" placeholder="กำหนดรหัสผ่านใหม่..." class="w-full px-3 py-1.5 border rounded-xl text-xs bg-white font-mono">
+                    </div>
+                    <div class="md:col-span-4">
+                        <label class="block text-xs font-medium text-slate-600 mb-1">ที่อยู่ร้าน</label>
+                        <input type="text" id="shopAddress" placeholder="ที่อยู่..." class="w-full px-3 py-1.5 border rounded-xl text-xs bg-white">
+                    </div>
+                </div>
+                <div class="flex justify-between items-center pt-1">
+                    <button onclick="clearShopSettings()" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-3 py-1.5 rounded-xl text-xs font-medium transition">🗑️ ล้างข้อมูลร้านค้า</button>
+                    <button onclick="saveShopSettings()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-xl text-xs font-medium">บันทึกการตั้งค่า</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- สรุปภาพรวม -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 no-print">
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                <p class="text-sm text-slate-500 font-medium">มูลค่าสินค้าคงเหลือ (ทุน)</p>
+                <h3 id="statTotalCost" class="text-2xl font-bold text-slate-900 mt-1">0.00 ฿</h3>
+            </div>
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                <p class="text-sm text-slate-500 font-medium">มูลค่าสินค้าคงเหลือ (ขาย)</p>
+                <h3 id="statTotalSale" class="text-2xl font-bold text-indigo-600 mt-1">0.00 ฿</h3>
+            </div>
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                <p class="text-sm text-slate-500 font-medium">ยอดขายรวมทั้งหมด (+ค่าส่ง)</p>
+                <h3 id="statTotalRevenue" class="text-2xl font-bold text-emerald-600 mt-1">0.00 ฿</h3>
+            </div>
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                <p class="text-sm text-slate-500 font-medium">กำไรสุทธิโดยประมาณ</p>
+                <h3 id="statTotalProfit" class="text-2xl font-bold text-amber-600 mt-1">0.00 ฿</h3>
+            </div>
+        </div>
+
+        <!-- แผงควบคุมด้านบน (รับเข้า / ขายออก / เพิ่มสินค้าใหม่) -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 no-print">
+            
+            <!-- 1. ช่องรับสินค้าเข้า (Stock In) -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
+                <div>
+                    <h2 class="text-lg font-bold text-emerald-700 mb-2 flex items-center gap-1">📥 รับสินค้าเข้าสตอก (Stock In)</h2>
+                    <p class="text-xs text-slate-500 mb-3">คลิกเลือกชื่อสินค้าเพื่อรับเข้าเพิ่ม</p>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">เลือกสินค้า</label>
+                            <select id="stockInSelect" class="w-full px-3 py-2 border-2 border-emerald-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-300 text-sm bg-white font-medium">
+                                <option value="">-- คลิกเลือกสินค้าที่ต้องการรับเข้า --</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">จำนวนที่รับเข้าเพิ่ม</label>
+                            <input type="number" id="stockInQty" min="1" value="1" 
+                                class="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-emerald-300">
+                        </div>
+                        <button type="button" onclick="executeStockIn()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-xl text-sm font-medium transition">
+                            ยืนยันรับเข้าสตอก (+)
+                        </button>
+                    </div>
+                </div>
+                <div id="stockInFeedback" class="mt-3 p-2.5 bg-slate-50 rounded-xl text-xs text-slate-600 min-h-[45px] flex items-center justify-center text-center">
+                    พร้อมรับรายการรับเข้า...
+                </div>
+            </div>
+
+            <!-- 2. ช่องขายสินค้าออก (POS) พร้อมบวกค่าส่ง & ออกใบเสร็จ -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between">
+                <div>
+                    <h2 class="text-lg font-bold text-indigo-700 mb-2 flex items-center gap-1">🏷️ ขายสินค้า (หน้าร้าน / ออนไลน์)</h2>
+                    <p class="text-xs text-slate-500 mb-2">เลือกสินค้า ระบุชื่อลูกค้า และค่าจัดส่ง (ถ้ามี)</p>
+                    <div class="space-y-2.5">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">เลือกสินค้า</label>
+                            <select id="posSelect" class="w-full px-3 py-2 border-2 border-indigo-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-300 text-sm bg-white font-medium">
+                                <option value="">-- คลิกเลือกสินค้าที่จะขาย --</option>
+                            </select>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 mb-1">จำนวน (ชิ้น)</label>
+                                <input type="number" id="posQty" min="1" value="1" 
+                                    class="w-full px-2 py-1.5 border rounded-xl text-sm focus:ring-2 focus:ring-indigo-300">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 mb-1">ชื่อลูกค้า / ผู้ซื้อ</label>
+                                <input type="text" id="posCustomer" value="ลูกค้าทั่วไป" placeholder="ชื่อลูกค้า..." 
+                                    class="w-full px-2 py-1.5 border rounded-xl text-sm bg-white">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">ค่าจัดส่ง (บาท) [ถ้ามี]</label>
+                            <input type="number" id="posShipping" min="0" step="1" value="0" placeholder="0" 
+                                class="w-full px-3 py-1.5 border rounded-xl text-sm bg-white font-semibold text-amber-700">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 pt-1">
+                            <button type="button" onclick="executePosSale(false)" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-xl text-xs font-medium transition">
+                                💾 ขายอย่างเดียว (-สตอก)
+                            </button>
+                            <button type="button" onclick="executePosSale(true)" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-xl text-xs font-medium transition shadow-sm">
+                                🖨️ ขาย & พิมพ์ใบเสร็จ
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div id="scanFeedback" class="mt-3 p-2.5 bg-slate-50 rounded-xl text-xs text-slate-600 min-h-[45px] flex items-center justify-center text-center">
+                    พร้อมบันทึกการขาย...
+                </div>
+            </div>
+
+            <!-- 3. ฟอร์มเพิ่มสินค้าใหม่ -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="text-lg font-bold text-slate-800">➕ เพิ่มสินค้าใหม่ / แก้ไข</h2>
+                    <button type="button" onclick="generateAutoBarcode()" class="text-xs bg-sky-50 text-sky-600 border border-sky-200 px-2.5 py-1 rounded-lg hover:bg-sky-100 font-medium">✨ สุ่มรหัสใหม่</button>
+                </div>
+                <form id="productForm" onsubmit="saveProduct(event)" class="space-y-2.5">
+                    <input type="hidden" id="editIndex">
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">บาร์โค้ด / SKU</label>
+                            <input type="text" id="pBarcode" required placeholder="รหัสสินค้า..." class="w-full px-3 py-1.5 border rounded-xl text-xs font-mono bg-slate-50">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">จำนวนเริ่มต้น</label>
+                            <input type="number" id="pQty" required min="0" value="1" class="w-full px-3 py-1.5 border rounded-xl text-xs">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">ชื่อสินค้า</label>
+                        <input type="text" id="pName" required placeholder="ชื่อสินค้า..." class="w-full px-3 py-1.5 border rounded-xl text-xs">
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">ทุนต่อหน่วย (฿)</label>
+                            <input type="number" id="pCost" required min="0" step="0.25" placeholder="0.00" class="w-full px-3 py-1.5 border rounded-xl text-xs">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">ราคาขาย (฿)</label>
+                            <input type="number" id="pPrice" required min="0" step="0.25" placeholder="0.00" class="w-full px-3 py-1.5 border rounded-xl text-xs">
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-2 pt-1">
+                        <button type="button" onclick="resetForm()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1.5 rounded-xl text-xs font-medium">ยกเลิก</button>
+                        <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-xl text-xs font-medium">บันทึกสินค้า</button>
+                    </div>
+                </form>
+            </div>
+
+        </div>
+
+        <!-- ตารางรายการสินค้าในสตอก -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden no-print">
+            <div class="p-4 bg-slate-50 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center gap-3">
+                <h3 class="font-bold text-slate-800">📋 รายการสินค้าทั้งหมดในสตอก</h3>
+                <input type="text" id="searchBox" onkeyup="renderTable()" placeholder="🔍 ค้นหาชื่อสินค้า หรือ บาร์โค้ด..." class="px-4 py-2 border rounded-xl text-sm w-full md:w-72 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-100 text-slate-600 text-xs uppercase tracking-wider">
+                            <th class="p-3">บาร์โค้ด / SKU</th>
+                            <th class="p-3">ชื่อสินค้า</th>
+                            <th class="p-3 text-center">คงเหลือ (รับเข้าเพิ่ม)</th>
+                            <th class="p-3 text-right">ทุน (บาท)</th>
+                            <th class="p-3 text-right">ขาย (บาท)</th>
+                            <th class="p-3 text-center">ขายออกรวม (ชิ้น)</th>
+                            <th class="p-3 text-right">ยอดขายรวม</th>
+                            <th class="p-3 text-center bg-emerald-50 text-emerald-800">สต็อกคงเหลือ</th>
+                            <th class="p-3 text-center">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="productTableBody" class="divide-y divide-slate-100 text-sm">
+                        <!-- รายการสินค้าแสดงที่นี่ -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ส่วนสรุปยอดขายรายเดือน & พิมพ์รายงาน -->
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-4 no-print">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-4">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-900 flex items-center gap-2">
+                        📊 รายงานสรุปยอดขายรายเดือน
+                    </h2>
+                    <p class="text-slate-500 text-xs mt-0.5">รวมยอดขายสินค้า + ค่าจัดส่ง และคำนวณกำไรสุทธิ</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <select id="reportMonthFilter" onchange="renderMonthlyReport()" class="px-3 py-2 border rounded-xl text-sm bg-white font-medium">
+                        <option value="all">-- แสดงทุกเดือนทั้งหมด --</option>
+                    </select>
+                    <button onclick="window.print()" class="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-medium transition flex items-center gap-1.5">
+                        🖨️ พิมพ์รายงานฉบับนี้
+                    </button>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-100 text-slate-600 text-xs uppercase tracking-wider">
+                            <th class="p-3">เดือน / ปี (พ.ศ.)</th>
+                            <th class="p-3 text-center">จำนวนบิล</th>
+                            <th class="p-3 text-center">ชิ้นที่ขาย</th>
+                            <th class="p-3 text-right">ยอดขายสินค้า</th>
+                            <th class="p-3 text-right text-amber-700">ค่าส่งรวม</th>
+                            <th class="p-3 text-right text-emerald-700">ยอดรวมทั้งสิ้น</th>
+                            <th class="p-3 text-right">ทุนรวม</th>
+                            <th class="p-3 text-right text-indigo-700">กำไรสุทธิ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="monthlyTableBody" class="divide-y divide-slate-100 text-sm">
+                        <!-- รายงานรายเดือน -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ส่วนสำหรับพิมพ์ใบเสร็จรับเงิน (แสดงเฉพาะตอนสั่งพิมพ์ใบเสร็จ) -->
+    <div id="receiptPrintArea" class="receipt-print-area max-w-sm mx-auto p-4 bg-white text-slate-800 font-sans text-xs space-y-3">
+        <div class="text-center space-y-0.5 border-b pb-2">
+            <h2 id="receiptShopName" class="text-base font-bold"></h2>
+            <p id="receiptShopAddress" class="text-[11px] text-slate-600"></p>
+            <p id="receiptShopContact" class="text-[11px] text-slate-600"></p>
+            <p id="receiptShopTax" class="text-[11px] text-slate-600"></p>
+        </div>
+        <div class="text-center font-bold text-sm bg-slate-100 py-1 rounded">
+            ใบเสร็จรับเงิน / ใบกำกับภาษีอย่างย่อ
+        </div>
+        <div class="space-y-1 text-slate-700 border-b pb-2">
+            <div class="flex justify-between"><span>เลขที่บิล:</span> <span id="receiptNo" class="font-mono font-bold"></span></div>
+            <div class="flex justify-between"><span>วันที่:</span> <span id="receiptDate"></span></div>
+            <div class="flex justify-between"><span>ลูกค้า:</span> <span id="receiptCustomer" class="font-bold"></span></div>
+        </div>
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="border-b text-[11px] text-slate-500">
+                    <th class="py-1">รายการ</th>
+                    <th class="py-1 text-center">จำนวน</th>
+                    <th class="py-1 text-right">ราคา/หน่วย</th>
+                    <th class="py-1 text-right">รวม</th>
+                </tr>
+            </thead>
+            <tbody id="receiptItemsBody">
+                <!-- รายการในใบเสร็จ -->
+            </tbody>
+        </table>
+        <div class="border-t pt-2 space-y-1 font-bold">
+            <div class="flex justify-between text-xs font-normal">
+                <span>ราคาสินค้า:</span> <span id="receiptSubtotal"></span>
+            </div>
+            <div class="flex justify-between text-xs font-normal text-amber-700">
+                <span>ค่าจัดส่ง:</span> <span id="receiptShippingFee"></span>
+            </div>
+            <div class="flex justify-between text-sm border-t pt-1">
+                <span>ยอดรวมทั้งสิ้น:</span> 
+                <span id="receiptTotal" class="text-emerald-700"></span>
+            </div>
+        </div>
+        <div class="text-center pt-4 text-[11px] text-slate-500 border-t border-dashed">
+            <p>*** ขอบคุณที่อุดหนุนครับ ***</p>
+            <p>ระบบจัดการร้านค้า ลุงแจ่ม อารมณ์ดี</p>
+        </div>
+    </div>
+
+    <script>
+        let shopInfo = JSON.parse(localStorage.getItem('lungjaem_shop')) || {
+            name: '',
+            phone: '',
+            taxId: '',
+            address: '',
+            pin: '000000'
+        };
+
+        if (!shopInfo.pin) shopInfo.pin = '000000';
+
+        let products = JSON.parse(localStorage.getItem('lungjaem_stock')) || [
+            { barcode: '8851234567890', name: 'น้ำผึ้งชันโรงแท้ (ขวดแก้ว)', qty: 15, cost: 180, price: 350, sold: 5 },
+            { barcode: '8850987654321', name: 'ชิงช้าไม้เนื้อแข็งเก่า', qty: 2, cost: 1200, price: 2500, sold: 1 }
+        ];
+
+        let salesLog = JSON.parse(localStorage.getItem('lungjaem_sales_log')) || [
+            { date: '2026-01-15T10:00:00.000Z', monthKey: '2026-01', monthName: 'มกราคม 2569', barcode: '8851234567890', name: 'น้ำผึ้งชันโรงแท้ (ขวดแก้ว)', qty: 3, cost: 180, price: 350, shipping: 40, customer: 'ลูกค้าทั่วไป' }
+        ];
+
+        const thaiMonths = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+
+        function verifyPin() {
+            const entered = document.getElementById('pinInput').value;
+            if (entered === shopInfo.pin) {
+                document.getElementById('lockScreen').style.display = 'none';
+                document.getElementById('pinInput').value = '';
+            } else {
+                alert('รหัสผ่านไม่ถูกต้อง!');
+                document.getElementById('pinInput').value = '';
+                document.getElementById('pinInput').focus();
+            }
+        }
+
+        function lockSystem() {
+            document.getElementById('lockScreen').style.display = 'flex';
+            document.getElementById('pinInput').focus();
+        }
+
+        document.getElementById('pinInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') verifyPin();
+        });
+
+        function getThaiMonthName(dateObj) {
+            const m = thaiMonths[dateObj.getMonth()];
+            const y = dateObj.getFullYear() + 543;
+            return `${m} ${y}`;
+        }
+
+        function getMonthKey(dateObj) {
+            const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const y = dateObj.getFullYear();
+            return `${y}-${m}`;
+        }
+
+        function initShopDisplay() {
+            const shopInfoDisplay = document.getElementById('headerShopInfoDisplay');
+            
+            document.getElementById('shopName').value = shopInfo.name || '';
+            document.getElementById('shopPhone').value = shopInfo.phone || '';
+            document.getElementById('shopTaxId').value = shopInfo.taxId || '';
+            document.getElementById('shopAddress').value = shopInfo.address || '';
+            document.getElementById('shopPin').value = shopInfo.pin || '';
+
+            if (shopInfo.name || shopInfo.phone || shopInfo.taxId || shopInfo.address) {
+                let htmlContent = '';
+                if (shopInfo.name) htmlContent += `<span class="font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100">🏪 ร้าน: ${shopInfo.name}</span>`;
+                if (shopInfo.phone) htmlContent += `<span class="text-slate-600 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">📞 โทร: ${shopInfo.phone}</span>`;
+                if (shopInfo.taxId) htmlContent += `<span class="text-slate-600 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">🆔 เลขผู้เสียภาษี: ${shopInfo.taxId}</span>`;
+                if (shopInfo.address) htmlContent += `<span class="text-slate-600 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">📍 ที่อยู่: ${shopInfo.address}</span>`;
+                shopInfoDisplay.innerHTML = htmlContent;
+            } else {
+                shopInfoDisplay.innerHTML = `<span class="text-slate-400 text-xs italic">ยังไม่ได้ตั้งค่าข้อมูลร้านค้า (คลิกปุ่ม "ตั้งค่าร้านค้า" ด้านขวาเพื่อกรอกข้อมูล)</span>`;
+            }
+        }
+
+        function toggleShopSettings() {
+            document.getElementById('shopSettingsBox').classList.toggle('hidden');
+        }
+
+        function saveShopSettings() {
+            shopInfo.name = document.getElementById('shopName').value.trim();
+            shopInfo.phone = document.getElementById('shopPhone').value.trim();
+            shopInfo.taxId = document.getElementById('shopTaxId').value.trim();
+            shopInfo.address = document.getElementById('shopAddress').value.trim();
+            
+            const newPin = document.getElementById('shopPin').value.trim();
+            if (newPin.length > 0) {
+                if (newPin.length !== 6) {
+                    alert('รหัสผ่าน PIN ต้องมีความยาว 6 หลักครับ');
+                    return;
+                }
+                shopInfo.pin = newPin;
+            }
+
+            localStorage.setItem('lungjaem_shop', JSON.stringify(shopInfo));
+            initShopDisplay();
+            toggleShopSettings();
+            alert('บันทึกข้อมูลเรียบร้อยแล้วครับ!');
+        }
+
+        function clearShopSettings() {
+            if (confirm('ต้องการล้างข้อมูลร้านค้าทั้งหมดใช่หรือไม่?')) {
+                shopInfo = { name: '', phone: '', taxId: '', address: '', pin: '000000' };
+                localStorage.removeItem('lungjaem_shop');
+                initShopDisplay();
+                toggleShopSettings();
+                alert('ล้างข้อมูลเรียบร้อย');
+            }
+        }
+
+        function generateAutoBarcode() {
+            const randomNum = Math.floor(1000000000 + Math.random() * 9000000000);
+            const newBarcode = '885' + randomNum;
+            if (products.some(p => p.barcode === newBarcode)) {
+                generateAutoBarcode();
+            } else {
+                document.getElementById('pBarcode').value = newBarcode;
+            }
+        }
+
+        function saveData() {
+            localStorage.setItem('lungjaem_stock', JSON.stringify(products));
+            localStorage.setItem('lungjaem_sales_log', JSON.stringify(salesLog));
+            renderTable();
+            updateDropdowns();
+            updateStats();
+            renderMonthlyReport();
+        }
+
+        function updateDropdowns() {
+            const stockInSelect = document.getElementById('stockInSelect');
+            stockInSelect.innerHTML = '<option value="">-- คลิกเลือกสินค้าที่ต้องการรับเข้า --</option>';
+            
+            const posSelect = document.getElementById('posSelect');
+            posSelect.innerHTML = '<option value="">-- คลิกเลือกสินค้าที่จะขาย --</option>';
+
+            products.forEach(p => {
+                const optText = `${p.name} (คงเหลือ: ${p.qty} ชิ้น) [ราคา: ${p.price} ฿]`;
+                
+                const opt1 = document.createElement('option');
+                opt1.value = p.barcode;
+                opt1.text = optText;
+                stockInSelect.appendChild(opt1);
+
+                const opt2 = document.createElement('option');
+                opt2.value = p.barcode;
+                opt2.text = optText;
+                posSelect.appendChild(opt2);
+            });
+        }
+
+        function saveProduct(e) {
+            e.preventDefault();
+            const index = document.getElementById('editIndex').value;
+            const barcode = document.getElementById('pBarcode').value.trim();
+            const name = document.getElementById('pName').value.trim();
+            const qty = parseInt(document.getElementById('pQty').value) || 0;
+            const cost = parseFloat(document.getElementById('pCost').value) || 0;
+            const price = parseFloat(document.getElementById('pPrice').value) || 0;
+
+            if (index === "") {
+                const existing = products.find(p => p.barcode === barcode);
+                if (existing) {
+                    existing.qty += qty;
+                    existing.cost = cost;
+                    existing.price = price;
+                } else {
+                    products.push({ barcode, name, qty, cost, price, sold: 0 });
+                }
+            } else {
+                products[index].barcode = barcode;
+                products[index].name = name;
+                products[index].qty = qty;
+                products[index].cost = cost;
+                products[index].price = price;
+            }
+
+            saveData();
+            resetForm();
+        }
+
+        function resetForm() {
+            document.getElementById('productForm').reset();
+            document.getElementById('editIndex').value = "";
+            document.getElementById('pQty').value = "1";
+            generateAutoBarcode();
+        }
+
+        function renderTable() {
+            const keyword = document.getElementById('searchBox').value.toLowerCase();
+            const tbody = document.getElementById('productTableBody');
+            tbody.innerHTML = "";
+
+            const filtered = products.filter(p => 
+                p.name.toLowerCase().includes(keyword) || p.barcode.includes(keyword)
+            );
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="9" class="p-6 text-center text-slate-400">ไม่พบรายการสินค้า</td></tr>`;
+                return;
+            }
+
+            filtered.forEach((p) => {
+                const actualIndex = products.indexOf(p);
+                const totalRevenue = p.sold * p.price;
+                
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition";
+                tr.innerHTML = `
+                    <td class="p-3 font-mono text-xs text-slate-600">${p.barcode}</td>
+                    <td class="p-3 font-medium text-slate-800">${p.name}</td>
+                    <td class="p-3 text-center">
+                        <div class="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 rounded-lg p-1">
+                            <button onclick="adjustQty(${actualIndex}, -1)" class="w-6 h-6 bg-white rounded shadow-sm text-xs font-bold text-emerald-700 hover:bg-emerald-100">-</button>
+                            <input type="number" value="${p.qty}" min="0" onchange="updateQtyDirect(${actualIndex}, this.value)" class="w-12 text-center font-bold text-emerald-700 bg-transparent focus:outline-none text-sm">
+                            <button onclick="adjustQty(${actualIndex}, 1)" class="w-6 h-6 bg-white rounded shadow-sm text-xs font-bold text-emerald-700 hover:bg-emerald-100">+</button>
+                        </div>
+                    </td>
+                    <td class="p-3 text-right">${p.cost.toLocaleString()}</td>
+                    <td class="p-3 text-right text-indigo-600 font-semibold">${p.price.toLocaleString()}</td>
+                    <td class="p-3 text-center font-bold text-slate-700">${p.sold} ชิ้น</td>
+                    <td class="p-3 text-right font-bold text-emerald-600">${totalRevenue.toLocaleString()} ฿</td>
+                    <td class="p-3 text-center bg-emerald-50/50">
+                        <span class="px-3 py-1 bg-emerald-100 text-emerald-800 font-bold rounded-full text-sm">
+                            ${p.qty} ชิ้น
+                        </span>
+                    </td>
+                    <td class="p-3 text-center">
+                        <div class="flex items-center justify-center gap-1">
+                            <button onclick="editProduct(${actualIndex})" class="p-1.5 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 text-xs" title="แก้ไข">✏️</button>
+                            <button onclick="deleteProduct(${actualIndex})" class="p-1.5 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100 text-xs" title="ลบ">🗑️</button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function adjustQty(index, amount) {
+            products[index].qty = Math.max(0, products[index].qty + amount);
+            saveData();
+        }
+
+        function updateQtyDirect(index, value) {
+            const newQty = parseInt(value);
+            if (!isNaN(newQty) && newQty >= 0) {
+                products[index].qty = newQty;
+                saveData();
+            } else {
+                renderTable();
+            }
+        }
+
+        function executeStockIn() {
+            const select = document.getElementById('stockInSelect');
+            const qtyInput = document.getElementById('stockInQty');
+            const feedback = document.getElementById('stockInFeedback');
+            
+            const code = select.value;
+            const addQty = parseInt(qtyInput.value) || 0;
+
+            if (!code) {
+                alert('กรุณาเลือกสินค้าก่อนครับ');
+                return;
+            }
+            if (addQty <= 0) {
+                alert('จำนวนที่รับเข้าต้องมากกว่า 0');
+                return;
+            }
+
+            const foundIndex = products.findIndex(p => p.barcode === code);
+            if (foundIndex !== -1) {
+                products[foundIndex].qty += addQty;
+                saveData();
+                feedback.innerHTML = `<span class="text-emerald-700 font-bold">✅ รับเข้าสำเร็จ:</span> ${products[foundIndex].name} (+${addQty})<br>สตอกคงเหลือ: <span class="font-bold">${products[foundIndex].qty}</span> ชิ้น`;
+                feedback.className = "mt-3 p-2.5 bg-emerald-50 rounded-xl text-xs border border-emerald-200 flex items-center justify-center text-center";
+                select.value = '';
+                qtyInput.value = '1';
+            }
+        }
+
+        function executePosSale(shouldPrint) {
+            const select = document.getElementById('posSelect');
+            const qtyInput = document.getElementById('posQty');
+            const customerInput = document.getElementById('posCustomer');
+            const shippingInput = document.getElementById('posShipping');
+            const feedback = document.getElementById('scanFeedback');
+
+            const code = select.value;
+            const sellQty = parseInt(qtyInput.value) || 0;
+            const customerName = customerInput.value.trim() || 'ลูกค้าทั่วไป';
+            const shippingFee = parseFloat(shippingInput.value) || 0;
+
+            if (!code) {
+                alert('กรุณาเลือกสินค้าที่ต้องการขายก่อนครับ');
+                return;
+            }
+            if (sellQty <= 0) {
+                alert('จำนวนที่ขายต้องมากกว่า 0');
+                return;
+            }
+
+            const foundIndex = products.findIndex(p => p.barcode === code);
+            if (foundIndex !== -1) {
+                if (products[foundIndex].qty >= sellQty) {
+                    products[foundIndex].qty -= sellQty;
+                    products[foundIndex].sold += sellQty;
+
+                    const now = new Date();
+                    salesLog.push({
+                        date: now.toISOString(),
+                        monthKey: getMonthKey(now),
+                        monthName: getThaiMonthName(now),
+                        barcode: products[foundIndex].barcode,
+                        name: products[foundIndex].name,
+                        qty: sellQty,
+                        cost: products[foundIndex].cost,
+                        price: products[foundIndex].price,
+                        shipping: shippingFee,
+                        customer: customerName
+                    });
+
+                    saveData();
+                    feedback.innerHTML = `<span class="text-indigo-700 font-bold">✅ ขายสำเร็จ (${customerName}):</span> ${products[foundIndex].name} (-${sellQty})<br>ค่าส่ง: ${shippingFee} ฿ | คงเหลือ: <span class="font-bold">${products[foundIndex].qty}</span> ชิ้น`;
+                    feedback.className = "mt-3 p-2.5 bg-indigo-50 rounded-xl text-xs border border-indigo-200 flex items-center justify-center text-center";
+
+                    if (shouldPrint) {
+                        printReceipt({
+                            shop: shopInfo,
+                            date: now.toLocaleString('th-TH'),
+                            billNo: 'INV-' + Math.floor(100000 + Math.random() * 900000),
+                            customer: customerName,
+                            name: products[foundIndex].name,
+                            qty: sellQty,
+                            price: products[foundIndex].price,
+                            subtotal: sellQty * products[foundIndex].price,
+                            shipping: shippingFee,
+                            total: (sellQty * products[foundIndex].price) + shippingFee
+                        });
+                    }
+
+                    select.value = '';
+                    qtyInput.value = '1';
+                    customerInput.value = 'ลูกค้าทั่วไป';
+                    shippingInput.value = '0';
+                } else {
+                    feedback.className = "mt-3 p-2.5 bg-rose-50 rounded-xl text-xs border border-rose-200 flex items-center justify-center text-center";
+                    feedback.innerHTML = `<span class="text-rose-700 font-bold">❌ สินค้าในสตอกไม่พอ:</span> มีเหลือแค่ ${products[foundIndex].qty} ชิ้น`;
+                }
+            }
+        }
+
+        function printReceipt(data) {
+            document.getElementById('receiptShopName').innerText = data.shop.name || 'ร้านค้าของคุณ';
+            document.getElementById('receiptShopAddress').innerText = data.shop.address ? `ที่อยู่: ${data.shop.address}` : '';
+            document.getElementById('receiptShopContact').innerText = data.shop.phone ? `โทร: ${data.shop.phone}` : '';
+            document.getElementById('receiptShopTax').innerText = data.shop.taxId ? `เลขประจำตัวผู้เสียภาษี: ${data.shop.taxId}` : '';
+            
+            document.getElementById('receiptNo').innerText = data.billNo;
+            document.getElementById('receiptDate').innerText = data.date;
+            document.getElementById('receiptCustomer').innerText = data.customer;
+
+            const itemsBody = document.getElementById('receiptItemsBody');
+            itemsBody.innerHTML = `
+                <tr class="border-b border-dashed">
+                    <td class="py-1">${data.name}</td>
+                    <td class="py-1 text-center">${data.qty}</td>
+                    <td class="py-1 text-right">${data.price.toLocaleString()}</td>
+                    <td class="py-1 text-right font-bold">${data.subtotal.toLocaleString()}</td>
+                </tr>
+            `;
+            document.getElementById('receiptSubtotal').innerText = data.subtotal.toLocaleString() + ' บาท';
+            document.getElementById('receiptShippingFee').innerText = data.shipping.toLocaleString() + ' บาท';
+            document.getElementById('receiptTotal').innerText = data.total.toLocaleString() + ' บาท';
+
+            setTimeout(() => {
+                window.print();
+            }, 200);
+        }
+
+        function editProduct(index) {
+            const p = products[index];
+            document.getElementById('editIndex').value = index;
+            document.getElementById('pBarcode').value = p.barcode;
+            document.getElementById('pName').value = p.name;
+            document.getElementById('pQty').value = p.qty;
+            document.getElementById('pCost').value = p.cost;
+            document.getElementById('pPrice').value = p.price;
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function deleteProduct(index) {
+            if (confirm(`ต้องการลบสินค้า "${products[index].name}" ออกจากระบบใช่หรือไม่?`)) {
+                products.splice(index, 1);
+                saveData();
+            }
+        }
+
+        function updateStats() {
+            let totalCostVal = 0;
+            let totalSaleVal = 0;
+            let totalRevenueVal = 0;
+            let totalEstimatedProfit = 0;
+
+            products.forEach(p => {
+                totalCostVal += (p.qty * p.cost);
+                totalSaleVal += (p.qty * p.price);
+            });
+
+            salesLog.forEach(s => {
+                const ship = s.shipping || 0;
+                totalRevenueVal += ((s.qty * s.price) + ship);
+                totalEstimatedProfit += (s.qty * (s.price - s.cost));
+            });
+
+            document.getElementById('statTotalCost').innerText = totalCostVal.toLocaleString() + ' ฿';
+            document.getElementById('statTotalSale').innerText = totalSaleVal.toLocaleString() + ' ฿';
+            document.getElementById('statTotalRevenue').innerText = totalRevenueVal.toLocaleString() + ' ฿';
+            document.getElementById('statTotalProfit').innerText = totalEstimatedProfit.toLocaleString() + ' ฿';
+        }
+
+        function renderMonthlyReport() {
+            const monthFilter = document.getElementById('reportMonthFilter');
+            const tbody = document.getElementById('monthlyTableBody');
+            
+            const monthsMap = {};
+            salesLog.forEach(s => {
+                if (!monthsMap[s.monthKey]) monthsMap[s.monthKey] = s.monthName;
+            });
+
+            const currentSelected = monthFilter.value;
+            monthFilter.innerHTML = '<option value="all">-- แสดงทุกเดือนทั้งหมด --</option>';
+            Object.keys(monthsMap).sort().reverse().forEach(key => {
+                const opt = document.createElement('option');
+                opt.value = key;
+                opt.text = monthsMap[key];
+                monthFilter.appendChild(opt);
+            });
+            monthFilter.value = currentSelected;
+
+            const selectedMonth = monthFilter.value;
+            const aggregated = {};
+
+            salesLog.forEach(s => {
+                if (selectedMonth === 'all' || s.monthKey === selectedMonth) {
+                    if (!aggregated[s.monthKey]) {
+                        aggregated[s.monthKey] = { monthName: s.monthName, transactions: 0, totalQty: 0, productRevenue: 0, totalShipping: 0, totalCost: 0 };
+                    }
+                    aggregated[s.monthKey].transactions += 1;
+                    aggregated[s.monthKey].totalQty += s.qty;
+                    aggregated[s.monthKey].productRevenue += (s.qty * s.price);
+                    aggregated[s.monthKey].totalShipping += (s.shipping || 0);
+                    aggregated[s.monthKey].totalCost += (s.qty * s.cost);
+                }
+            });
+
+            tbody.innerHTML = "";
+            const sortedKeys = Object.keys(aggregated).sort().reverse();
+
+            if (sortedKeys.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-slate-400">ยังไม่มีประวัติการขาย</td></tr>`;
+                return;
+            }
+
+            let grandProdRev = 0;
+            let grandShip = 0;
+            let grandTotal = 0;
+            let grandProfit = 0;
+
+            sortedKeys.forEach(key => {
+                const data = aggregated[key];
+                const totalRevWithShip = data.productRevenue + data.totalShipping;
+                const profit = data.productRevenue - data.totalCost;
+                
+                grandProdRev += data.productRevenue;
+                grandShip += data.totalShipping;
+                grandTotal += totalRevWithShip;
+                grandProfit += profit;
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition";
+                tr.innerHTML = `
+                    <td class="p-3 font-bold text-slate-800">${data.monthName}</td>
+                    <td class="p-3 text-center">${data.transactions} บิล</td>
+                    <td class="p-3 text-center font-semibold text-slate-600">${data.totalQty} ชิ้น</td>
+                    <td class="p-3 text-right font-semibold text-slate-700">${data.productRevenue.toLocaleString()} ฿</td>
+                    <td class="p-3 text-right font-semibold text-amber-700">+${data.totalShipping.toLocaleString()} ฿</td>
+                    <td class="p-3 text-right font-bold text-emerald-600">${totalRevWithShip.toLocaleString()} ฿</td>
+                    <td class="p-3 text-right text-slate-500">${data.totalCost.toLocaleString()} ฿</td>
+                    <td class="p-3 text-right font-bold text-indigo-700">${profit.toLocaleString()} ฿</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            const totalTr = document.createElement('tr');
+            totalTr.className = "bg-slate-50 font-bold border-t-2 border-slate-200";
+            totalTr.innerHTML = `
+                <td class="p-3 text-slate-900">รวมยอดทั้งหมดทุกเดือน</td>
+                <td class="p-3 text-center">-</td>
+                <td class="p-3 text-center">-</td>
+                <td class="p-3 text-right text-slate-800">${grandProdRev.toLocaleString()} ฿</td>
+                <td class="p-3 text-right text-amber-700">+${grandShip.toLocaleString()} ฿</td>
+                <td class="p-3 text-right text-emerald-700">${grandTotal.toLocaleString()} ฿</td>
+                <td class="p-3 text-right">-</td>
+                <td class="p-3 text-right text-indigo-800">${grandProfit.toLocaleString()} ฿</td>
+            `;
+            tbody.appendChild(totalTr);
+        }
+
+        function exportData() {
+            const backupData = { shop: shopInfo, products: products, salesLog: salesLog };
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", "stock_and_sales_backup_" + new Date().toISOString().slice(0,10) + ".json");
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+
+        function importData(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (Array.isArray(imported)) {
+                        products = imported;
+                    } else if (imported.products) {
+                        products = imported.products;
+                        if (imported.shop) {
+                            shopInfo = imported.shop;
+                            localStorage.setItem('lungjaem_shop', JSON.stringify(shopInfo));
+                        }
+                        if (imported.salesLog) salesLog = imported.salesLog;
+                    }
+                    saveData();
+                    initShopDisplay();
+                    alert('นำเข้าข้อมูลสำเร็จ!');
+                } catch (err) {
+                    alert('เกิดข้อผิดพลาดในการอ่านไฟล์');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        initShopDisplay();
+        generateAutoBarcode();
+        renderTable();
+        updateDropdowns();
+        updateStats();
+        renderMonthlyReport();
+    </script>
+</body>
+</html>
